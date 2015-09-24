@@ -1,0 +1,33 @@
+---
+title: "Impact of weather events across USA"
+author: "Rossella Bargiacchi"
+date: "September 23, 2015"
+output: html_document
+---
+
+```{r echo = TRUE, cache = TRUE}
+setwd("~/DataScience/ReproducibleResearch/PeerAssessment2")
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", method = "curl")
+unzip("repdata_data_StormData.csv.bz2")
+data <- read.csv("repdata_data_StormData.csv", stringsAsFactors = FALSE)
+```
+
+I see that there is a problem with the accuracy of the EVTYPE variable. There are some typos (for instance AVALANCE instead of AVALANCHE), and the notation of events is sometimes inconsistent (for instance capital vs. small letters used, or extra blank spaces inserted). 
+
+```{r echo = TRUE, cache = TRUE}
+FEvType <- as.factor(data$EVTYPE)
+head(levels(FEvType), 30)
+tail(levels(FEvType), 30)
+```
+
+```{r echo = TRUE, cache = TRUE}
+Events <- c("Astronomical Low Tide", "Avalanche", "Blizzard", "Coastal Flood", "Cold/Wind Chill", "Debris Flow", "Dense Fog", "Dense Smoke", "Drought", "Dust Devil", "Dust Storm", "Excessive Heat", "Extreme Cold/Wind Chill", "Flash Flood", "Flood", "Freezing Fog", "Frost/Freeze", "Funnel Cloud", "Hail", "Heat", "Heavy Rain", "Heavy Snow", "High Surf", "High Wind", "Hurricane/Typhoon", "Ice Storm", "Lakeshore Flood", "Lake-Effect Snow", "Lightning", "Marine Hail", "Marine High Wind", "Marine Strong Wind", "Marine Thunderstorm Wind", "Rip Current", "Seiche", "Sleet", "Storm Tide", "Strong Wind", "Thunderstorm Wind", "Tornado", "Tropical Depression", "Tropical Storm", "Tsunami", "Volcanic Ash", "Waterspout", "Wildfire", "Winter Storm", "Winter Weather")
+Events <- toupper(Events)
+myEvents <- toupper(data$EVTYPE)
+myEvents <- sub("TSTM", "THUNDERSTORM", myEvents)
+myEvents <- as.factor(myEvents)
+library("stringdist")
+eventsDistance <- stringdistmatrix(levels(myEvents),Events, method = "jw", p=0.1)
+eventsMatch <- apply(eventsDistance, 1, function(x) levels(myEvents)[x] = Events[which.min(x)] )
+levels(myEvents) <- eventsMatch
+```

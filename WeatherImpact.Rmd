@@ -5,8 +5,12 @@ date: "September 23, 2015"
 output: html_document
 ---
 
+# Data preparation
+
+I am going to use the Storm Data collected by the U.S. National Oceanic and Atmospheric Administration's (NOAA), in the version provided as material for the course of Reproducible Research offered by Johns Hopkins University on Coursera.
+
 ```{r echo = TRUE, cache = TRUE}
-setwd("~/DataScience/ReproducibleResearch/PeerAssessment2")
+setwd("~/DataScience/ReproducibleResearch/PeerAssessment2/WeatherImpactUSA")
 download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", method = "curl")
 unzip("repdata_data_StormData.csv.bz2")
 data <- read.csv("repdata_data_StormData.csv", stringsAsFactors = FALSE)
@@ -20,6 +24,8 @@ head(levels(FEvType), 30)
 tail(levels(FEvType), 30)
 ```
 
+To solve this issue, I map the EVTYPE variable into the 48 event types officially classified by NOAA's [National Weather Service Instruction 10-1605, dated August 17, 2007](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf).
+
 ```{r echo = TRUE, cache = TRUE}
 Events <- c("Astronomical Low Tide", "Avalanche", "Blizzard", "Coastal Flood", "Cold/Wind Chill", "Debris Flow", "Dense Fog", "Dense Smoke", "Drought", "Dust Devil", "Dust Storm", "Excessive Heat", "Extreme Cold/Wind Chill", "Flash Flood", "Flood", "Freezing Fog", "Frost/Freeze", "Funnel Cloud", "Hail", "Heat", "Heavy Rain", "Heavy Snow", "High Surf", "High Wind", "Hurricane/Typhoon", "Ice Storm", "Lakeshore Flood", "Lake-Effect Snow", "Lightning", "Marine Hail", "Marine High Wind", "Marine Strong Wind", "Marine Thunderstorm Wind", "Rip Current", "Seiche", "Sleet", "Storm Tide", "Strong Wind", "Thunderstorm Wind", "Tornado", "Tropical Depression", "Tropical Storm", "Tsunami", "Volcanic Ash", "Waterspout", "Wildfire", "Winter Storm", "Winter Weather")
 Events <- toupper(Events)
@@ -30,4 +36,57 @@ library("stringdist")
 eventsDistance <- stringdistmatrix(levels(myEvents),Events, method = "jw", p=0.1)
 eventsMatch <- apply(eventsDistance, 1, function(x) levels(myEvents)[x] = Events[which.min(x)] )
 levels(myEvents) <- eventsMatch
+library("dplyr")
+myData <- mutate(data, Event = myEvents)
+```
+
+I would like to have a look a time series of the events and therefore I transform the BGN_DATE variable into a Date variable that I can use as a reference for the time series, this is a reasonable approximation, although of course some of the impact of a weather event can occur with some delay. 
+
+```{r echo = TRUE, cache = TRUE}
+data$Date <- as.Date(data$BGN_DATE, format = "%m/%d/%Y")
+```
+
+I now observe that before 1990 there are only three types of events recorded: Thunderstorm Wind, Tornado and Hail.
+
+```{r echo = TRUE, cache = TRUE}
+library("dplyr")
+by_Event <- group_by(myData, Event)
+by_Event50 <- filter(by_Event, Date < "1990-01-01")
+occurrenceEvents50 <- summarise(by_Event50, n = n())
+occurrenceEvents50
+```
+
+I therefore choose to conduct the rest of the analysis on the subset of data recorded after January 1st, 1990.
+
+```{r echo = TRUE, cache = TRUE}
+library("dplyr")
+myData <- filter(myData, Date >= "1990-01-01")
+```
+
+# Health impact
+
+I use the Fatalities and Injuries variables to analyse the impact of weather events on human health.
+
+```{r echo = TRUE, cache = TRUE}
+library("dplyr")
+dataHealth <- select(myData, Date = Date, Event = Event, State = STATE, Fatalities = FATALITIES, Injuries = INJURIES)
+dataHealth$State <- as.factor(dataHealth$State)
+
+by_Event90 <- filter(by_Event, Date >= 1990-01-01)
+occurrenceEvents90 <- summarise(by_Event90, n = n())
+occurrenceEvents90
+
+frequentEvents <- filter(occurrenceEvents90, n>25000)
+frequentEvents
+
+healthImpactEvents90 <- summarise(by_Event90, averageFatalities = sum(Fatalities)/n(), averageInjuries = sum(Injuries)/n())
+bigFatalitiesEvents <- filter(healthImpactEvents90, averageFatalities > 1000)
+bigInjuriesEvents <- filter(healthImpactEvents90, averageInjuries > 6000)
+
+```
+
+```{r echo = TRUE, cache = TRUE}
+library("lattice")
+xyplot(Fatalities ~ Date | Event, data = dataHealth)
+xyplot(Injuries ~ Date | Event, data = dataHealth)
 ```

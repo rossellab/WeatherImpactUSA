@@ -1,92 +1,117 @@
 ---
-title: "Impact of weather events across USA"
+title: "Impact of weather events on human health and on the economy across USA"
 author: "Rossella Bargiacchi"
 date: "September 23, 2015"
 output: html_document
 ---
-
-# Data preparation
-
+ 
+## Data preparation
+ 
 I am going to use the Storm Data collected by the U.S. National Oceanic and Atmospheric Administration's (NOAA), in the version provided as material for the course of Reproducible Research offered by Johns Hopkins University on Coursera.
-
+ 
 ```{r echo = TRUE, cache = TRUE}
-setwd("~/DataScience/ReproducibleResearch/PeerAssessment2/WeatherImpactUSA")
-download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", method = "curl")
+# I assume here that an appropriate working directory is selected
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", destfile = "repdata_data_StormData.csv.bz2", method = "curl")
 unzip("repdata_data_StormData.csv.bz2")
 data <- read.csv("repdata_data_StormData.csv", stringsAsFactors = FALSE)
 ```
-
-I see that there is a problem with the accuracy of the EVTYPE variable. There are some typos (for instance AVALANCE instead of AVALANCHE), and the notation of events is sometimes inconsistent (for instance capital vs. small letters used, or extra blank spaces inserted). 
-
+ 
+The EVTYPE variable presents some typos, and the notation of events is sometimes inconsistent, as can be seen in the following sample: for instance "AVALANCE" and "AVALANCHE" are inserted as different event types and so are "BLACK ICE" and "Black Ice". 
+ 
 ```{r echo = TRUE, cache = TRUE}
-FEvType <- as.factor(data$EVTYPE)
-head(levels(FEvType), 30)
-tail(levels(FEvType), 30)
+head(levels(as.factor(data$EVTYPE)), 30)
 ```
-
-To solve this issue, I map the EVTYPE variable into the 48 event types officially classified by NOAA's [National Weather Service Instruction 10-1605, dated August 17, 2007](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf).
-
+ 
+To solve this issue, the EVTYPE variable can be mapped into the 48 event types officially classified by NOAA's [National Weather Service Instruction 10-1605, dated August 17, 2007](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf).
+ 
 ```{r echo = TRUE, cache = TRUE}
 Events <- c("Astronomical Low Tide", "Avalanche", "Blizzard", "Coastal Flood", "Cold/Wind Chill", "Debris Flow", "Dense Fog", "Dense Smoke", "Drought", "Dust Devil", "Dust Storm", "Excessive Heat", "Extreme Cold/Wind Chill", "Flash Flood", "Flood", "Freezing Fog", "Frost/Freeze", "Funnel Cloud", "Hail", "Heat", "Heavy Rain", "Heavy Snow", "High Surf", "High Wind", "Hurricane/Typhoon", "Ice Storm", "Lakeshore Flood", "Lake-Effect Snow", "Lightning", "Marine Hail", "Marine High Wind", "Marine Strong Wind", "Marine Thunderstorm Wind", "Rip Current", "Seiche", "Sleet", "Storm Tide", "Strong Wind", "Thunderstorm Wind", "Tornado", "Tropical Depression", "Tropical Storm", "Tsunami", "Volcanic Ash", "Waterspout", "Wildfire", "Winter Storm", "Winter Weather")
-Events <- toupper(Events)
+Events <- toupper(Events)  # transform every event name into uppercase to avoid duplicates
 myEvents <- toupper(data$EVTYPE)
-myEvents <- sub("TSTM", "THUNDERSTORM", myEvents)
+myEvents <- sub("TSTM", "THUNDERSTORM", myEvents)  # expand the abbreviation to avoid confusion 
 myEvents <- as.factor(myEvents)
+
+# match typos and name variations to the nearest official event name
 library("stringdist")
-eventsDistance <- stringdistmatrix(levels(myEvents),Events, method = "jw", p=0.1)
-eventsMatch <- apply(eventsDistance, 1, function(x) levels(myEvents)[x] = Events[which.min(x)] )
+eventsDistance <- stringdistmatrix(levels(myEvents),Events, method = "jw", p=0.1) 
+eventsMatch <- apply(eventsDistance, 1, function(x) levels(myEvents)[x] = Events[which.min(x)] ) 
 levels(myEvents) <- eventsMatch
+```
+ 
+The data frame used for further analysis will include the official names for the variable Event and a usable Date variable based on the original BGN_DATE. The latter is a reasonable approximation, although of course some of the impact of a weather event can occur with some delay. 
+ 
+```{r echo = TRUE, cache = TRUE}
 library("dplyr")
 myData <- mutate(data, Event = myEvents)
+myData$Date <- as.Date(myData$BGN_DATE, format = "%m/%d/%Y")
 ```
-
-I would like to have a look a time series of the events and therefore I transform the BGN_DATE variable into a Date variable that I can use as a reference for the time series, this is a reasonable approximation, although of course some of the impact of a weather event can occur with some delay. 
-
-```{r echo = TRUE, cache = TRUE}
-data$Date <- as.Date(data$BGN_DATE, format = "%m/%d/%Y")
-```
-
-I now observe that before 1990 there are only three types of events recorded: Thunderstorm Wind, Tornado and Hail.
-
+ 
+We can see that before 1990 there are only three types of events recorded: Thunderstorm Wind, Tornado and Hail.
+ 
 ```{r echo = TRUE, cache = TRUE}
 library("dplyr")
 by_Event <- group_by(myData, Event)
-by_Event50 <- filter(by_Event, Date < "1990-01-01")
-occurrenceEvents50 <- summarise(by_Event50, n = n())
-occurrenceEvents50
+summarise(subset(by_Event, Date < "1990-01-01"), n = n())
 ```
-
+ 
 I therefore choose to conduct the rest of the analysis on the subset of data recorded after January 1st, 1990.
-
+ 
 ```{r echo = TRUE, cache = TRUE}
 library("dplyr")
 myData <- filter(myData, Date >= "1990-01-01")
 ```
+ 
+Finally, the economic variables PROPDMG and CROPDMG need to be transformed as to take into account the PROPDMGEXP and CROPDMGEXP multipliers, and all the unused variables can be excluded from the analitic dataset.
+ 
+```{r echo = TRUE, cache = TRUE}
+# apply the appropriate multipliers to the damage variables
+multiplier <- c("K" = 1000, "M" = 1000000, "B" = 1000000000)
+myData$propertyDamage <- myData$PROPDMG * multiplier[myData$PROPDMGEXP]
+myData$cropDamage <- myData$CROPDMG * multiplier[myData$CROPDMGEXP]
 
-# Health impact
-
-I use the Fatalities and Injuries variables to analyse the impact of weather events on human health.
-
+# exclude unused variables from the dataset
+library("dplyr")
+myData <- select(myData, Date, Event, Fatalities, propertyDamage, cropDamage)
+```
+ 
+## The impact of different weather events on human health
+ 
+The Fatalities and Injuries variables represent the impact of weather events on human health. The relative impact of each event is computed in terms of average number of fatalities and injuries per event occurrence. The absolute impact instead is computed in terms of total number of fatalities and injuries caused over time by an event. 
+I rank the impact of each event based on fatalities first and injuries second, both in relative and in absolute terms. For each event I also look at the relative frequency (number of occurrences of this event divided by the number of occurrences of all events).
+ 
 ```{r echo = TRUE, cache = TRUE}
 library("dplyr")
-dataHealth <- select(myData, Date = Date, Event = Event, State = STATE, Fatalities = FATALITIES, Injuries = INJURIES)
-dataHealth$State <- as.factor(dataHealth$State)
 
-by_Event90 <- filter(by_Event, Date >= 1990-01-01)
-occurrenceEvents90 <- summarise(by_Event90, n = n())
-occurrenceEvents90
+# Compute the occurrences of each event and the total occurrences of all events
+by_Event90 <- group_by(myData, Event)
+occurrenceEvents <- summarise(by_Event90, n = n())
+totalEvents <- sum(occurrenceEvents$n)
 
-frequentEvents <- filter(occurrenceEvents90, n>25000)
-frequentEvents
+# Compute the relative impact of each event and rank events based on their relative impact
+relativeImpact <- summarise(by_Event90, averageFatalities = sum(FATALITIES)/n(), averageInjuries = sum(INJURIES)/n(), occurrences = n(), frequency = paste(round(n()/totalEvents, digits = 3),"%"))
+relativeRanks <- order(relativeImpact$averageFatalities, relativeImpact$averageInjuries, decreasing = TRUE)
+relativeRanking <- relativeImpact[relativeRanks,]
+relativeRanking[1:3,]
 
-healthImpactEvents90 <- summarise(by_Event90, averageFatalities = sum(Fatalities)/n(), averageInjuries = sum(Injuries)/n())
-bigFatalitiesEvents <- filter(healthImpactEvents90, averageFatalities > 1000)
-bigInjuriesEvents <- filter(healthImpactEvents90, averageInjuries > 6000)
-
+# Compute the absolute impact of each event and rank events based on their absolute impact
+absoluteImpact <- summarise(by_Event90, totalFatalities = sum(FATALITIES), totalInjuries = sum(INJURIES), occurrences = n(), frequency = paste(round(n()/totalEvents, digits = 3),"%"))
+absoluteRanks <- order(absoluteImpact$totalFatalities, absoluteImpact$totalInjuries, decreasing = TRUE)
+absoluteRanking <- absoluteImpact[absoluteRanks,]
+absoluteRanking[1:3,]
 ```
-
+ 
+From these results it appears that Heat and Exessive Heat score really high in both relative and absolute terms. According to the NOAA's Weather Service Instruction: "(..)Fatalities (directly-related) or major impacts to human health occurring during excessive heat warning conditions are reported using this event category.
+Fatalities or impacts to human health occurring when conditions meet locally/regionally defined heat advisory criteria are reported within the Heat event category (...)". These categories are thus based on locally defined criteria and they correspond to difference nuances of a similar event. If we would look at them together, they would rank even higher than they do separately. Unusually hot temperatures can therefore be considered a major threat to human health.
+ 
+A Tsunami is rarely observed in the USA but when it happens it has a big impact on human health, while Tornado is observed a bit more frequently, and has a big record of cumulated fatalities and injuries. 
+ 
+It is perhaps interesting to see that the top three killer/injurer events in both relative and absolute terms do not include Hurricane/Typhoon, which scores 6th in relative terms and 16th in absolute terms.
+ 
+## The impact of different weather events on the economy
+ 
 ```{r echo = TRUE, cache = TRUE}
-library("lattice")
-xyplot(Fatalities ~ Date | Event, data = dataHealth)
-xyplot(Injuries ~ Date | Event, data = dataHealth)
+relativeDamage <- summarise(by_Event90, averageFatalities = sum(FATALITIES)/n(), averageInjuries = sum(INJURIES)/n(), occurrences = n(), frequency = paste(round(n()/totalEvents, digits = 3),"%"))
+relativeRanks <- order(relativeImpact$averageFatalities, relativeImpact$averageInjuries, decreasing = TRUE)
+relativeRanking <- relativeImpact[relativeRanks,]
+relativeRanking[1:3,]
 ```

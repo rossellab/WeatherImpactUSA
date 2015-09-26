@@ -64,14 +64,18 @@ myData <- filter(myData, Date >= "1990-01-01")
 Finally, the economic variables PROPDMG and CROPDMG need to be transformed as to take into account the PROPDMGEXP and CROPDMGEXP multipliers, and all the unused variables can be excluded from the analitic dataset.
  
 ```{r echo = TRUE, cache = TRUE}
+# substitute blank spaces with the letter "U" (Units), to avoid creating NA's where not necessary
+myData$PROPDMGEXP <- sub("^$", "U", myData$PROPDMGEXP)
+myData$CROPDMGEXP <- sub("^$", "U", myData$CROPDMGEXP)
+
 # apply the appropriate multipliers to the damage variables
-multiplier <- c("K" = 1000, "M" = 1000000, "B" = 1000000000)
-myData$propertyDamage <- myData$PROPDMG * multiplier[myData$PROPDMGEXP]
+multiplier <- c("U" = 1, "K" = 1000, "M" = 1000000, "B" = 1000000000) 
+myData$propertyDamage <- myData$PROPDMG * multiplier[myData$PROPDMGEXP] 
 myData$cropDamage <- myData$CROPDMG * multiplier[myData$CROPDMGEXP]
 
 # exclude unused variables from the dataset
 library("dplyr")
-myData <- select(myData, Date, Event, Fatalities, propertyDamage, cropDamage)
+myData <- select(myData, Date, Event, Fatalities, Injuries, propertyDamage, cropDamage)
 ```
  
 ## The impact of different weather events on human health

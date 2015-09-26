@@ -75,7 +75,7 @@ myData$cropDamage <- myData$CROPDMG * multiplier[myData$CROPDMGEXP]
 
 # exclude unused variables from the dataset
 library("dplyr")
-myData <- select(myData, Date, Event, Fatalities, Injuries, propertyDamage, cropDamage)
+myData <- select(myData, Date, Event, Fatalities = FATALITIES, Injuries = INJURIES, propertyDamage, cropDamage)
 ```
  
 ## The impact of different weather events on human health
